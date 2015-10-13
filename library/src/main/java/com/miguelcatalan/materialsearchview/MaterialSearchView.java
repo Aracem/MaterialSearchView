@@ -1,5 +1,8 @@
 package com.miguelcatalan.materialsearchview;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -17,10 +20,12 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewAnimationUtils;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.EditText;
@@ -137,7 +142,7 @@ public class MaterialSearchView extends FrameLayout implements Filter.FilterList
 
     private void initiateView() {
         LayoutInflater.from(mContext).inflate(R.layout.search_view, this, true);
-        setVisibility(GONE);
+        setVisibility(INVISIBLE);
 
         mSearchTopBar = (RelativeLayout) findViewById(R.id.search_top_bar);
         mSuggestionsListView = (ListView) findViewById(R.id.suggestion_list);
@@ -498,26 +503,11 @@ public class MaterialSearchView extends FrameLayout implements Filter.FilterList
         mSearchSrcTextView.requestFocus();
 
         if (animate) {
-            AnimationUtil.fadeInView(this, AnimationUtil.ANIMATION_DURATION_MEDIUM, new AnimationUtil
-                    .AnimationListener() {
-                @Override
-                public boolean onAnimationStart(View view) {
-                    return false;
-                }
-
-                @Override
-                public boolean onAnimationEnd(View view) {
-                    if (mSearchViewListener != null) {
-                        mSearchViewListener.onSearchViewShown();
-                    }
-                    return false;
-                }
-
-                @Override
-                public boolean onAnimationCancel(View view) {
-                    return false;
-                }
-            });
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                showWithRevealAnimation();
+            } else {
+                showWithFadeAnimation();
+            }
         } else {
             setVisibility(VISIBLE);
             if (mSearchViewListener != null) {
@@ -525,6 +515,49 @@ public class MaterialSearchView extends FrameLayout implements Filter.FilterList
             }
         }
         mIsSearchOpen = true;
+    }
+
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    private void showWithRevealAnimation() {
+        int cx = mSearchTopBar.getWidth() - (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 24, getResources().getDisplayMetrics());
+        int cy = mSearchTopBar.getHeight() / 2;
+        int finalRadius = Math.max(getWidth(), getHeight());
+        Animator anim = ViewAnimationUtils.createCircularReveal(this, cx, cy, 0, finalRadius);
+        setVisibility(VISIBLE);
+        anim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (mSearchViewListener != null) {
+                    mSearchViewListener.onSearchViewShown();
+                }
+                super.onAnimationEnd(animation);
+            }
+        });
+        anim.start();
+    }
+
+    private void showWithFadeAnimation() {
+        AnimationUtil.fadeInView(this, AnimationUtil.ANIMATION_DURATION_MEDIUM,
+                new AnimationUtil.AnimationListener() {
+                    @Override
+                    public boolean onAnimationStart(View view) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onAnimationEnd(View view) {
+                        if (mSearchViewListener != null) {
+                            mSearchViewListener.onSearchViewShown();
+                        }
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onAnimationCancel(View view) {
+                        return false;
+                    }
+                });
     }
 
     /**
@@ -539,12 +572,57 @@ public class MaterialSearchView extends FrameLayout implements Filter.FilterList
         dismissSuggestions();
         clearFocus();
 
-        setVisibility(GONE);
-        if (mSearchViewListener != null) {
-            mSearchViewListener.onSearchViewClosed();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            closeWithRevealAnimation();
+        } else {
+            closeWithFaceAnimation();
         }
-        mIsSearchOpen = false;
+    }
 
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    private void closeWithRevealAnimation() {
+        int cx = mSearchTopBar.getWidth() - (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 24, getResources().getDisplayMetrics());
+        ;
+        int cy = mSearchTopBar.getHeight() / 2;
+        int initialRadius = Math.max(getWidth(), getHeight());
+        Animator anim = ViewAnimationUtils.createCircularReveal(this, cx, cy, initialRadius, 0);
+        anim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                setVisibility(GONE);
+                if (mSearchViewListener != null) {
+                    mSearchViewListener.onSearchViewClosed();
+                }
+                mIsSearchOpen = false;
+                super.onAnimationEnd(animation);
+            }
+        });
+        anim.start();
+    }
+
+    private void closeWithFaceAnimation() {
+        AnimationUtil.fadeOutView(this, AnimationUtil.ANIMATION_DURATION_MEDIUM, new AnimationUtil.AnimationListener() {
+            @Override
+            public boolean onAnimationStart(View view) {
+                return false;
+            }
+
+            @Override
+            public boolean onAnimationEnd(View view) {
+                setVisibility(GONE);
+                if (mSearchViewListener != null) {
+                    mSearchViewListener.onSearchViewClosed();
+                }
+                mIsSearchOpen = false;
+                return false;
+            }
+
+            @Override
+            public boolean onAnimationCancel(View view) {
+                return false;
+            }
+        });
     }
 
     /**
